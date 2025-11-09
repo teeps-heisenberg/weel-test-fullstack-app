@@ -1,0 +1,95 @@
+# =============================================================================
+# DOCKER COMPOSE CONFIGURATION FOR LOCAL DEVELOPMENT
+# =============================================================================
+#
+# SECURITY NOTES:
+# - This configuration uses demo credentials suitable for local development only
+# - For production deployment:
+#   * Change JWT_SECRET to a secure random string (generate with: openssl rand -base64 32)
+#   * Use strong database passwords
+#   * Set GEMINI_API_KEY if you want AI summary features (optional)
+
+# OPTIONAL AI FEATURES:
+# - The app works perfectly without GEMINI_API_KEY
+# - AI summaries will be disabled, but all core features remain functional
+# - To enable AI: Get a free key from https://aistudio.google.com/app/apikey
+#   and set it in a .env file (see .env.example)
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: delivery-db
+    environment:
+      POSTGRES_USER: postgres
+      # Demo password for local development - change in production
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: delivery_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d delivery_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: delivery-backend
+    ports:
+      - "5000:5000"
+    environment:
+      # Database connection (matches postgres service credentials)
+      DATABASE_URL: postgresql://postgres:devpass@postgres:5432/delivery_db?schema=public
+
+      # Demo JWT secret for local development - CHANGE IN PRODUCTION
+      JWT_SECRET: demo-secret-change-in-production
+
+      # Optional: Gemini API key for AI summaries
+      # Get your key from: https://aistudio.google.com/app/apikey
+      # Leave empty or unset to disable AI features (app works fine without it)
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+
+      PORT: 5000
+      NODE_ENV: development
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: sh -c "npx prisma migrate deploy && npm run prisma:seed && npm run dev"
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: delivery-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host
+    networks:
+      - app-network
+
+volumes:
+  postgres_data:
+
+# ADD THIS: Explicit network for container communication
+networks:
+  app-network:
+    driver: bridge
