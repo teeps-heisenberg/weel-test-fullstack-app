@@ -17,7 +17,6 @@ build/
 tmp/
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -36,3 +35,4 @@ logs/
 # Prisma
 .prisma/
 
+config.bat
